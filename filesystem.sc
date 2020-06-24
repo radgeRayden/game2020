@@ -23,7 +23,7 @@ inline check-error ()
             error (string errstring)
 
 fn... init (argc = argc, argv = argv, mountdir : rawstring = ".")
-    if (not (physfs.init (argv @ 0)))
+    if (not (physfs.init argv))
         check-error;
 
     physfs.mount mountdir "/" true
