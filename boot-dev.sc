@@ -9,6 +9,7 @@ default
 
 run-stage;
 using import glm
+using import glsl
 import .raydEngine.use
 import HID
 
@@ -33,6 +34,32 @@ gfx.init (HID.window.create-wgpu-surface) width height
 
 HID.window.toggle-visible;
 
+vvv bind vertex
+gfx.Shader 'vertex
+    fn ()
+        using import glm
+        using import glsl
+        local vertices =
+            arrayof vec4
+                vec4 -0.5 -0.5 0.0 1.0
+                vec4  0.5 -0.5 0.0 1.0
+                vec4  0.0  0.5 0.0 1.0
+
+        gl_Position = (vertices @ gl_VertexIndex)
+
+vvv bind fragment
+gfx.Shader 'fragment
+    fn ()
+        using import glm
+        using import glsl
+        out color : vec4
+            location = 0
+        let x y u v = (unpack (gl_FragCoord / (vec4 1280 720 1 1)))
+        color = (vec4 x y u 1)
+
+let render-pip =
+    gfx.RenderPipeline vertex fragment
+
 while (not (HID.window.received-quit-event?))
     HID.window.poll-events;
     local cmd-encoder = (gfx.CommandEncoder)
@@ -44,12 +71,10 @@ while (not (HID.window.received-quit-event?))
             # will error if backbuffer couldn't be acquired this frame.
             continue;
 
-    'finish render-pass
+    'set-pipeline render-pass render-pip
+    'draw render-pass 3 1 0 0
+    'finish render-pass render-pip
     local cmdbuf = ('finish cmd-encoder)
     'submit cmdbuf
     gfx.present;
 ;
-
-let b = gfx.backend
-wgpu.device_destroy b.device
-wgpu.adapter_destroy b.adapter
