@@ -23,7 +23,7 @@ inline check-error ()
             error (string errstring)
 
 fn... init (argc = argc, argv = argv, mountdir : rawstring = ".")
-    if (not (physfs.init argv))
+    if (not (physfs.init (argv @ 0)))
         check-error;
 
     physfs.mount mountdir "/" true
@@ -32,7 +32,6 @@ fn... init (argc = argc, argv = argv, mountdir : rawstring = ".")
         inline __typecall (cls)
             bitcast none this-type
         inline __drop (self)
-            let puts = (extern 'puts (function i32 rawstring))
             physfs.deinit;
             ;
 
@@ -73,8 +72,13 @@ fn load-file (path)
 
 struct FileData
     data : (Array u8)
-    static-if (not AppSettings.AOT?)
-        let filename = string
+
+    filename :
+        embed
+            static-if (not AppSettings.AOT?)
+                string
+            else
+                rawstring
     Text :=
         property
             inline "get" (self)
@@ -84,10 +88,22 @@ struct FileData
             inline "get" (self)
                 (countof self.data)
 
+
+    inline __imply (lhsT rhsT)
+        static-if (rhsT < pointer)
+            static-match rhsT
+            case (pointer i8)
+                inline (self)
+                    (imply self.data pointer) as (pointer i8)
+            case (pointer u8)
+                inline (self)
+                    (imply self.data pointer) as (pointer u8)
+            default
+                ;
     fn get-text (self)
-        let data-ptr = (imply self.data (pointer u8))
-        let i8ptr = (bitcast data-ptr (pointer i8))
-        string i8ptr (countof self.data)
+        string
+            ((imply self.data pointer) as (pointer i8))
+            (countof self.data)
 
     inline __typecall (cls path)
         let data = (load-file path)
