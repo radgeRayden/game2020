@@ -5,6 +5,7 @@ using import Array
 
 import .raydEngine.use
 let stbi = (import foreign.stbi)
+import .filesystem
 
 enum ImageFormat plain
     RGBA8
@@ -26,6 +27,7 @@ fn... load-image (data : (Array u8), format)
         stdio.printf "%s %s" ("cannot load image:" as rawstring) (stbi.failure_reason)
         raise false
 
+    # TODO: replace with Struct.__typecall
     let byte-array = (ptrtoref (alloca (Array u8)))
     byte-array._items = imgbytes
     let size =
@@ -39,7 +41,6 @@ fn... load-image (data : (Array u8), format)
 
     _ byte-array width height channel-count
 
-
 struct ImageData
     data : (Array u8)
     width : i32
@@ -47,8 +48,17 @@ struct ImageData
     channel-count : i32
     format : ImageFormat
 
-    inline __typecall (cls filedata)
-        let data width height channels = (load-image filedata.data ImageFormat.RGBA8)
+    inline __typecall (cls data)
+        let bytes =
+            static-match (typeof data)
+            case filesystem.FileData
+                data.data
+            case ((Array u8) or (Array i8))
+                data
+            default
+                static-error "data is of unsupported type"
+
+        let data width height channels = (load-image bytes ImageFormat.RGBA8)
         super-type.__typecall cls
             data = data
             width = width
