@@ -43,8 +43,8 @@ fn... load-image (data : (Array u8), format)
 
 struct ImageData
     data : (Array u8)
-    width : i32
-    height : i32
+    width : u32
+    height : u32
     channel-count : i32
     format : ImageFormat
 
@@ -61,8 +61,8 @@ struct ImageData
         let data width height channels = (load-image bytes ImageFormat.RGBA8)
         super-type.__typecall cls
             data = data
-            width = width
-            height = height
+            width = (width as u32)
+            height = (height as u32)
             channel-count = channels
             format = ImageFormat.RGBA8
 
