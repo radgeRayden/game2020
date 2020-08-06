@@ -13,9 +13,11 @@ using import glm
 using import glsl
 using import struct
 using import enum
+using import Array
 import .raydEngine.use
 import HID
 import .image
+import .gfx-descriptor-prototypes
 
 let gfx = (import gfx-wgpu)
 let wgpu = (import foreign.wgpu-native)
@@ -49,7 +51,7 @@ fn white-1px-texture ()
                 height = 1
                 channel-count = 4
                 format = image.ImageFormat.RGBA8
-        white-texture = (gfx.2DTexture image-data "white-1px-texture")
+        white-texture = (gfx.2DTexture image-data false "white-1px-texture")
     'force-unwrap white-texture
 
 # ================================================================================
@@ -87,7 +89,7 @@ gfx.Shader 'vertex
         mvp := (extractvalue mvp 0)
         texcoords.out = texcoords.in
         color.out = color.in
-        gl_Position = (mvp * (vec4 position 0 1))
+        gl_Position = (mvp * (vec4 position 0.0 1))
 
 vvv bind fragment
 gfx.Shader 'fragment
@@ -109,18 +111,11 @@ gfx.Shader 'fragment
 # RENDER PIPELINE - NEEDS TO BE EXTRACTED
 local texture-set-entries =
     arrayof wgpu.BindGroupLayoutEntry
-        typeinit
+        copy* gfx-descriptor-prototypes.binding-layouts.2d-sampled-texture
             binding = 0
-            visibility = wgpu.ShaderStage_FRAGMENT
-            ty = wgpu.BindingType.SampledTexture
-            multisampled = false
-            view_dimension = wgpu.TextureViewDimension.D2
-            texture_component_type = wgpu.TextureComponentType.Uint
-        typeinit
+        copy* gfx-descriptor-prototypes.binding-layouts.sampler
             binding = 1
-            visibility = wgpu.ShaderStage_FRAGMENT
-            ty = wgpu.BindingType.Sampler
-            multisampled = false
+            multisampled = true
 
 local bind-group-layouts =
     arrayof wgpu.BindGroupLayoutId
@@ -144,7 +139,7 @@ let mvp-uniform-buffer =
         &local wgpu.BufferDescriptor
             label = "mvp"
             size = (sizeof mat4)
-            usage = (wgpu.BufferUsage_UNIFORM | wgpu.BufferUsage_COPY_DST)
+            usage = gfx.UNIFORM_BUFFER_USAGE
 
 let vtx-uniforms-bgroup =
     wgpu.device_create_bind_group gfx.backend.device
@@ -152,75 +147,42 @@ let vtx-uniforms-bgroup =
             label = "vertex uniforms"
             layout = (bind-group-layouts @ 0)
             entries =
-                &local wgpu.BindGroupEntry
-                    binding = 0
-                    resource =
-                        wgpu.BindingResource
-                            tag = wgpu.BindingResource_Tag.Buffer
-                            typeinit
-                                buffer =
-                                    typeinit
-                                        wgpu.BufferBinding
-                                            buffer = mvp-uniform-buffer
-                                            offset = 0
-                                            size = (sizeof mvp-uniform-buffer)
+                &local
+                    gfx-descriptor-prototypes.bindings.make-buffer-descriptor
+                        binding = 0
+                        buffer = mvp-uniform-buffer
+                        offset = 0
+                        size = (sizeof mvp-uniform-buffer)
             entries_length = 1
 
-let diffuse-texture-view =
+let notexture-view =
     wgpu.texture_create_view ('force-unwrap ((white-1px-texture) . handle))
-        &local wgpu.TextureViewDescriptor
-            label = "1px-texture-view"
-            format = wgpu.TextureFormat.Rgba8Unorm
-            dimension = wgpu.TextureViewDimension.D2
-            aspect = wgpu.TextureAspect.All
-            base_mip_level = 0
-            level_count = 1
-            base_array_layer = 0
-            array_layer_count = 1
+        &local
+            copy* gfx-descriptor-prototypes.objects.2d-texture-view
+                label = "1px-white-texture-view"
 
-let diffuse-sampler =
+let sprite-sampler =
     wgpu.device_create_sampler gfx.backend.device
-        &local wgpu.SamplerDescriptor
-            label = "diffuse sampler"
-            address_mode_u = wgpu.AddressMode.ClampToEdge
-            address_mode_v = wgpu.AddressMode.ClampToEdge
-            address_mode_w = wgpu.AddressMode.ClampToEdge
-            mag_filter = wgpu.FilterMode.Nearest
-            min_filter = wgpu.FilterMode.Nearest
-            mipmap_filter = wgpu.FilterMode.Nearest
-            lod_min_clamp = -100.0
-            lod_max_clamp = 100.0
-            compare = wgpu.CompareFunction.Always
+        &local
+            copy* gfx-descriptor-prototypes.objects.sprite-sampler
+                label = "diffuse sampler"
 
-local texture-bgroup-entries =
+local notexture-bgroup-entries =
     arrayof wgpu.BindGroupEntry
-        typeinit
+        gfx-descriptor-prototypes.bindings.make-texture-view-descriptor
             binding = 0
-            resource =
-                wgpu.BindingResource
-                    tag = wgpu.BindingResource_Tag.TextureView
-                    typeinit
-                        texture_view =
-                            typeinit
-                                diffuse-texture-view
-        typeinit
+            texture-view = notexture-view
+        gfx-descriptor-prototypes.bindings.make-sampler-descriptor
             binding = 1
-            resource =
-                wgpu.BindingResource
-                    tag = wgpu.BindingResource_Tag.Sampler
-                    typeinit
-                        sampler =
-                            typeinit
-                                diffuse-sampler
+            sampler-id = sprite-sampler
 
-let texture-bgroup =
+let notexture-bgroup =
     wgpu.device_create_bind_group gfx.backend.device
         &local wgpu.BindGroupDescriptor
-            label = "texture bind group"
+            label = "notexture bind group"
             layout = (bind-group-layouts @ 1)
-            entries = texture-bgroup-entries
-            entries_length = (countof texture-bgroup-entries)
-   
+            entries = notexture-bgroup-entries
+            entries_length = (countof notexture-bgroup-entries)
 
 let rpip-layout =
     wgpu.device_create_pipeline_layout gfx.backend.device
@@ -251,7 +213,7 @@ local vertex-buffer-layouts =
             attributes = vertex-attributes
             attributes_length = (countof vertex-attributes)
 
-let render-pip =
+let screen-render-pip =
     gfx.RenderPipeline
         wgpu.device_create_render_pipeline gfx.backend.device
             &local wgpu.RenderPipelineDescriptor
@@ -284,72 +246,195 @@ let render-pip =
                         vertex_buffers = vertex-buffer-layouts
                         vertex_buffers_length = (countof vertex-buffer-layouts)
 
+let internal-render-pip =
+    gfx.RenderPipeline
+        wgpu.device_create_render_pipeline gfx.backend.device
+            &local wgpu.RenderPipelineDescriptor
+                layout = rpip-layout
+                vertex_stage =
+                    wgpu.ProgrammableStageDescriptor
+                        module = ('force-unwrap vertex.handle)
+                        entry_point = "main"
+                fragment_stage =
+                    &local wgpu.ProgrammableStageDescriptor
+                        module = ('force-unwrap fragment.handle)
+                        entry_point = "main"
+                primitive_topology = wgpu.PrimitiveTopology.TriangleList
+                rasterization_state =
+                    &local wgpu.RasterizationStateDescriptor
+                sample_count = 4
+                sample_mask = 0xFFFFFFFF
+                color_states =
+                    &local wgpu.ColorStateDescriptor
+                        format = wgpu.TextureFormat.Rgba8Unorm
+                        color_blend =
+                            typeinit
+                                src_factor = wgpu.BlendFactor.One
+                                dst_factor = wgpu.BlendFactor.Zero
+                                operation = wgpu.BlendOperation.Add
+                        write_mask = wgpu.ColorWrite_ALL
+                color_states_length = 1
+                vertex_state =
+                    wgpu.VertexStateDescriptor
+                        index_format = wgpu.IndexFormat.Uint16
+                        vertex_buffers = vertex-buffer-layouts
+                        vertex_buffers_length = (countof vertex-buffer-layouts)
+
 # END OF RENDER PIPELINE
 
-let vbuffer =
+let tri-vbuffer =
     wgpu.device_create_buffer gfx.backend.device
         &local wgpu.BufferDescriptor
             label = "triangle attributes"
             size = ((sizeof VertexAttributes) * 3)
-            usage =
-                wgpu.BufferUsage_VERTEX | wgpu.BufferUsage_COPY_DST
+            usage = gfx.VERTEX_BUFFER_USAGE
 
-local vertices =
+local tri-vertices =
     arrayof VertexAttributes
         typeinit
             position = (vec2 -0.5 -0.5)
-            texcoords = (vec2 0 0)
+            texcoords = (vec2 0.0 0.0)
             color = (vec4 1.0 1.0 1.0 1.0)
         typeinit
             position = (vec2 0.5 -0.5)
-            texcoords = (vec2 0 0)
+            texcoords = (vec2 1.0 0.0)
             color = (vec4 1.0 1.0 1.0 1.0)
         typeinit
             position = (vec2 0.0  0.5)
+            texcoords = (vec2 0.5 1.0)
+            color = (vec4 1.0 1.0 1.0 1.0)
+
+wgpu.queue_write_buffer (wgpu.device_get_default_queue gfx.backend.device)
+    tri-vbuffer
+    0
+    &tri-vertices as voidstar as (mutable pointer u8)
+    sizeof tri-vertices
+
+let screen-quad-vbuffer =
+    wgpu.device_create_buffer gfx.backend.device
+        &local wgpu.BufferDescriptor
+            label = "screen quad attributes"
+            size = ((sizeof VertexAttributes) * 6)
+            usage = gfx.VERTEX_BUFFER_USAGE
+
+local screen-quad-vertices =
+    arrayof VertexAttributes
+        typeinit
+            position = (vec2 -1.0 1.0)
+            texcoords = (vec2 0 0)
+            color = (vec4 1.0 1.0 1.0 1.0)
+        typeinit
+            position = (vec2 -1.0 -1.0)
+            texcoords = (vec2 0 1)
+            color = (vec4 1.0 1.0 1.0 1.0)
+        typeinit
+            position = (vec2 1.0  -1.0)
+            texcoords = (vec2 1 1)
+            color = (vec4 1.0 1.0 1.0 1.0)
+        typeinit
+            position = (vec2 1.0  -1.0)
+            texcoords = (vec2 1 1)
+            color = (vec4 1.0 1.0 1.0 1.0)
+        typeinit
+            position = (vec2 1.0  1.0)
+            texcoords = (vec2 1 0)
+            color = (vec4 1.0 1.0 1.0 1.0)
+        typeinit
+            position = (vec2 -1.0 1.0)
             texcoords = (vec2 0 0)
             color = (vec4 1.0 1.0 1.0 1.0)
 
 wgpu.queue_write_buffer (wgpu.device_get_default_queue gfx.backend.device)
-    vbuffer
+    screen-quad-vbuffer
     0
-    &vertices as voidstar as (mutable pointer u8)
-    sizeof vertices
+    &screen-quad-vertices as voidstar as (mutable pointer u8)
+    sizeof screen-quad-vertices
+
+# SCREEN RENDER TARGET
+# texture for the render target, and a pipeline that just samples and draws to a fullscreen quad.
+let window-width window-height = (HID.window.size)
+let screen-render-target =
+    gfx.2DTexture
+        window-width as u32
+        window-height as u32
+        true
+        "screen render target"
+
+let scr-render-view =
+    wgpu.texture_create_view ('force-unwrap screen-render-target.handle)
+        &local
+            copy* gfx-descriptor-prototypes.objects.2d-texture-view
+                label = "screen target"
+
+local scr-render-bgroup-entries =
+    arrayof wgpu.BindGroupEntry
+        gfx-descriptor-prototypes.bindings.make-texture-view-descriptor
+            binding = 0
+            texture-view = scr-render-view
+        gfx-descriptor-prototypes.bindings.make-sampler-descriptor
+            binding = 1
+            sampler-id = sprite-sampler
+
+let scr-render-bgroup =
+    wgpu.device_create_bind_group gfx.backend.device
+        &local wgpu.BindGroupDescriptor
+            label = "notexture bind group"
+            layout = (bind-group-layouts @ 1)
+            entries = scr-render-bgroup-entries
+            entries_length = (countof scr-render-bgroup-entries)
 
 while (not (HID.window.received-quit-event?))
     HID.window.poll-events;
     local cmd-encoder = (gfx.CommandEncoder)
 
-    let render-pass =
+    local cmd-encoder = (gfx.CommandEncoder)
+    let screen-render-pass =
         try
-            local rp = (gfx.screen-pass cmd-encoder (vec4 0.017 0.017 0.017 1.0))
+            # local rp = (gfx.screen-pass cmd-encoder (vec4 0.017 0.017 0.017 1.0))
+            let handle =
+                wgpu.command_encoder_begin_render_pass ('force-unwrap cmd-encoder.handle)
+                    &local wgpu.RenderPassDescriptor
+                        color_attachments =
+                            &local wgpu.RenderPassColorAttachmentDescriptor
+                                attachment = scr-render-view
+                                resolve_target = ((gfx.acquire-backbuffer) . view_id)
+                                load_op = wgpu.LoadOp.Clear
+                                store_op = wgpu.StoreOp.Store
+                                clear_color = (wgpu.Color 0.017 0.017 0.017 1.0)
+                        color_attachments_length = 1
+                        depth_stencil_attachment = null
+            local rp =
+                gfx.RenderPass
+                    handle = handle
+
         else
             continue;
-
-    'set-pipeline render-pass render-pip
-    let rpass = ('force-unwrap render-pass.handle)
-    wgpu.render_pass_set_vertex_buffer rpass 0 vbuffer 0 0
+    'set-pipeline screen-render-pass internal-render-pip
+    let rpass = ('force-unwrap screen-render-pass.handle)
+    wgpu.render_pass_set_vertex_buffer rpass 0 tri-vbuffer 0 0
     wgpu.render_pass_set_bind_group rpass 0 vtx-uniforms-bgroup null 0
-    wgpu.render_pass_set_bind_group rpass 1 texture-bgroup null 0
+    wgpu.render_pass_set_bind_group rpass 1 notexture-bgroup null 0
 
     let window-width window-height = (HID.window.size)
+
     local camera-mvp =
         *
             # set origin to top left corner
-            # transform.translation (vec3 -1 -1 0)
+            transform.translation (vec3 -1 -1 0)
             transform.ortographic-projection window-width window-height true
+            transform.translation (vec3 300 300 0)
             transform.scaling (vec3 300 300 1)
-
     wgpu.queue_write_buffer (wgpu.device_get_default_queue gfx.backend.device)
         mvp-uniform-buffer
         0
         &camera-mvp as voidstar as (mutable pointer u8)
         sizeof camera-mvp
 
-    'draw render-pass 3 1 0 0
+    'draw screen-render-pass 3 1 0 0
 
-
-    'finish render-pass render-pip
+    'finish screen-render-pass
     local cmdbuf = ('finish cmd-encoder)
     'submit cmdbuf
+
     gfx.present;
 ;
