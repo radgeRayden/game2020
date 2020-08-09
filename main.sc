@@ -5,8 +5,6 @@ import .renderer
 
 # Platform code initialization
 HID.init (HID.WindowOptions (visible? = true)) (HID.GfxAPI.WebGPU)
-let width height = (HID.window.size)
-gfx.init (HID.window.create-wgpu-surface) width height
 
 # module initialization
 renderer.init;
@@ -22,7 +20,6 @@ HID.on-key-event =
         if (keybind ev KeyCode.ESCAPE)
             HID.window.close;
 
-let width height = (HID.window.size)
-
 while (not (HID.window.received-quit-event?))
     HID.window.poll-events;
+    renderer.frame;
