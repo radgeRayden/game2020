@@ -14,7 +14,6 @@ struct GfxState
     adapter : (Option wgpu.AdapterId)
     device : (Option wgpu.DeviceId)
     swap-chain : wgpu.SwapChainId
-    screen-resolve-target : (Option wgpu.TextureId)
     queue : wgpu.QueueId
 
 global istate : GfxState
