@@ -2,6 +2,7 @@ let AppSettings = (import radlib.app-settings)
 using import struct
 using import enum
 using import Array
+using import property
 
 import .raydEngine.use
 let stbi = (import foreign.stbi)
@@ -48,6 +49,11 @@ struct ImageData
     channel-count : i32
     format : ImageFormat
 
+    vvv bind Size
+    property
+        inline "get" (self)
+            countof self.data
+           
     inline __typecall (cls data)
         let bytes =
             static-match (typeof data)
