@@ -46,7 +46,6 @@ struct SpriteBatch
             indices @ (index-offset + 4) = (top-right as u16)
             indices @ (index-offset + 5) = (top-left as u16)
 
-        let ibuffer-size =
         let device queue =
             'force-unwrap gfxstate.istate.device
             gfxstate.istate.queue
@@ -54,12 +53,12 @@ struct SpriteBatch
             wgpu.device_create_buffer device
                 &local wgpu.BufferDescriptor
                     label = "spritebatch indices"
-                    size = ibuffer-size
+                    size = IndexBufferSize
                     usage =
                         wgpu.BufferUsage_COPY_DST | wgpu.BufferUsage_INDEX
 
         wgpu.queue_write_buffer queue
-            \ ibuffer 0 ((imply indices pointer) as (pointer u8)) ibuffer-size
+            \ ibuffer 0 ((imply indices pointer) as (pointer u8)) IndexBufferSize
 
         local vertices = ((Array VertexAttributes))
         let vbuffer-size =
