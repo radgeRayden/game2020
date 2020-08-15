@@ -72,7 +72,6 @@ struct SpriteBatch
         local vertices = ((Array VertexAttributes))
         let vbuffer-size =
             (sizeof VertexAttributes) * 4 * SpriteLimit
-        print vbuffer-size
         let vbuffer =
             wgpu.device_create_buffer device
                 &local wgpu.BufferDescriptor
