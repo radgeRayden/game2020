@@ -52,7 +52,7 @@ global tex-atlas =
             mip_level_count = 1
             sample_count = 1
             dimension = wgpu.TextureDimension.D2
-            format = wgpu.TextureFormat.Rgba8Unorm
+            format = wgpu.TextureFormat.Rgba8UnormSrgb
             usage =
                 wgpu.TextureUsage_COPY_DST | wgpu.TextureUsage_SAMPLED
 
@@ -75,7 +75,7 @@ let atlas-tex-view =
     wgpu.texture_create_view tex-atlas
         &local wgpu.TextureViewDescriptor
             label = "atlas texview"
-            format = wgpu.TextureFormat.Rgba8Unorm
+            format = wgpu.TextureFormat.Rgba8UnormSrgb
             dimension = wgpu.TextureViewDimension.D2
             aspect = wgpu.TextureAspect.All
             base_mip_level = 0
