@@ -2,8 +2,10 @@ using import radlib.core-extensions
 
 using import enum
 using import glm
+using import struct
 
 import .raydEngine.use
+import math
 import HID
 import timer
 import .gfxstate
@@ -12,6 +14,7 @@ import .2dtools
 import .image
 import .filesystem
 import .shader-bindings
+import .gfx.descriptors
 
 # Platform code initialization
 filesystem.init;
@@ -79,6 +82,26 @@ let atlas-tex-view =
             level_count = 1
             base_array_layer = 0
             array_layer_count = 1
+
+let atlas-sampler =
+    wgpu.device_create_sampler device
+        &local wgpu.SamplerDescriptor
+            label = "diffuse sampler"
+            address_mode_u = wgpu.AddressMode.ClampToEdge
+            address_mode_v = wgpu.AddressMode.ClampToEdge
+            address_mode_w = wgpu.AddressMode.ClampToEdge
+            mag_filter = wgpu.FilterMode.Nearest
+            min_filter = wgpu.FilterMode.Nearest
+            mipmap_filter = wgpu.FilterMode.Nearest
+            compare = wgpu.CompareFunction.Always
+
+global transform-ubo =
+    wgpu.device_create_buffer device
+        &local wgpu.BufferDescriptor
+            label = "transform uniform"
+            size = (sizeof mat4)
+            usage =
+                wgpu.BufferUsage_COPY_DST | wgpu.BufferUsage_UNIFORM
 
 let vertex-shader fragment-shader =
     do
@@ -148,10 +171,10 @@ local bind-group-layouts =
 let sprite-pip-layout =
     wgpu.device_create_pipeline_layout device
         &local wgpu.PipelineLayoutDescriptor
-            bind_group_layouts = (&bind-group-layouts as (pointer u64))
+            bind_group_layouts = ((& (view bind-group-layouts)) as (pointer u64))
             bind_group_layouts_length = 2
 
-let sprite-pipeline =
+global sprite-pipeline =
     wgpu.device_create_render_pipeline device
         &local wgpu.RenderPipelineDescriptor
             layout = sprite-pip-layout
@@ -172,13 +195,13 @@ let sprite-pipeline =
                     format = wgpu.TextureFormat.Bgra8UnormSrgb
                     alpha_blend =
                         typeinit
-                            src_factor = wgpu.BlendFactor.One
-                            dst_factor = wgpu.BlendFactor.Zero
+                            src_factor = wgpu.BlendFactor.SrcAlpha
+                            dst_factor = wgpu.BlendFactor.OneMinusSrcAlpha
                             operation = wgpu.BlendOperation.Add
                     color_blend =
                         typeinit
-                            src_factor = wgpu.BlendFactor.One
-                            dst_factor = wgpu.BlendFactor.Zero
+                            src_factor = wgpu.BlendFactor.SrcAlpha
+                            dst_factor = wgpu.BlendFactor.OneMinusSrcAlpha
                             operation = wgpu.BlendOperation.Add
                     write_mask = wgpu.ColorWrite_ALL
             color_states_length = 1
@@ -215,11 +238,48 @@ let sprite-pipeline =
             sample_count = 1
             sample_mask = 0xffffffff
 
-global batch = (2dtools.SpriteBatch)
+local transform-binding =
+    (gfx.descriptors.bindings.Buffer 0 transform-ubo 0 (sizeof mat4))
 
+global transform-bgroup =
+    wgpu.device_create_bind_group device
+        &local wgpu.BindGroupDescriptor
+            label = "transform bind group"
+            layout = (bind-group-layouts @ 0)
+            entries = &transform-binding
+            entries_length = 1
+
+global atlas-tex-bgroup =
+    wgpu.device_create_bind_group device
+        &local wgpu.BindGroupDescriptor
+            label = "atlas texture bind group"
+            layout = (bind-group-layouts @ 1)
+            entries =
+                &local
+                    arrayof wgpu.BindGroupEntry
+                        gfx.descriptors.bindings.TextureView 0 atlas-tex-view
+                        gfx.descriptors.bindings.Sampler 1 atlas-sampler
+            entries_length = 2
+
+global batch = (2dtools.SpriteBatch)
+struct Character plain
+    position : vec2
+global character : Character
 fn update (dt)
     let KeyCode = HID.keyboard.KeyCode
+    let pos = character.position
+    dt := (1 / 60)
+
     if (HID.keyboard.down? KeyCode.LEFT)
+        pos.x -= (50 * dt)
+    elseif (HID.keyboard.down? KeyCode.RIGHT)
+        pos.x += (50 * dt)
+
+    'clear batch
+    'add batch (pos.x as i32) (pos.y as i32) (45 * 3) (45 * 3) 0
+        2dtools.TextureQuad
+            position = (vec2 0 0)
+            extent = (vec2 (1 / 8) (1 / 7))
     ;
 
 fn draw ()
@@ -239,9 +299,22 @@ fn draw ()
                         attachment = swapchain-image.view_id
                         load_op = wgpu.LoadOp.Clear
                         store_op = wgpu.StoreOp.Store
-                        clear_color = (wgpu.Color 0.017 0.017 0.017 1.0)
+                        clear_color = (wgpu.Color 1 1 1 1)
                 color_attachments_length = 1
 
+    wgpu.render_pass_set_pipeline render-pass sprite-pipeline
+
+    let width height = (HID.window.size)
+    local transform-data =
+        math.transform.ortographic-projection width height true
+    wgpu.queue_write_buffer gfxstate.istate.queue  transform-ubo 0
+        &transform-data as (pointer u8)
+        sizeof mat4
+
+    wgpu.render_pass_set_bind_group render-pass
+        \ shader-bindings.DescriptorSet.Transform transform-bgroup null 0
+    wgpu.render_pass_set_bind_group render-pass
+        \ shader-bindings.DescriptorSet.Textures atlas-tex-bgroup null 0
     'draw batch render-pass
 
     wgpu.render_pass_end_pass render-pass

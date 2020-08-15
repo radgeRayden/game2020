@@ -1,10 +1,14 @@
 using import radlib.core-extensions
 using import Array
 using import struct
+using import glm
+using import property
 import .wgpu
 import .gfxstate
 
-fn make-2d-pipeline ()
+struct TextureQuad plain
+    position : vec2
+    extent : vec2
 
 struct SpriteVertexAttributes plain
     position : vec2
@@ -14,7 +18,7 @@ struct SpriteVertexAttributes plain
 struct SpriteBatch
     vbuffer          : wgpu.BufferId
     ibuffer          : wgpu.BufferId
-    texture-bindings : wgpu.BingGroupId
+    # texture-bindings : wgpu.BindGroupId
     vertices         : (Array SpriteVertexAttributes)
 
     VertexAttributes := SpriteVertexAttributes
@@ -23,6 +27,11 @@ struct SpriteBatch
     IndexBufferSize  := ((sizeof u16) * MaxIndexCount)
     MaxVertexCount   := (SpriteLimit * 4)
     VertexBufferSize := ((sizeof VertexAttributes) * MaxVertexCount)
+
+    vvv bind SpriteCount
+    property
+        inline "get" (self)
+            (countof self.vertices) // 4
 
     inline __typecall (cls)
         # index buffer never changes (while we don't have batch resizing),
@@ -63,6 +72,7 @@ struct SpriteBatch
         local vertices = ((Array VertexAttributes))
         let vbuffer-size =
             (sizeof VertexAttributes) * 4 * SpriteLimit
+        print vbuffer-size
         let vbuffer =
             wgpu.device_create_buffer device
                 &local wgpu.BufferDescriptor
@@ -71,10 +81,64 @@ struct SpriteBatch
                     usage =
                         wgpu.BufferUsage_COPY_DST | wgpu.BufferUsage_VERTEX
 
+        local vertices = ((Array VertexAttributes))
+
         super-type.__typecall cls
             ibuffer = ibuffer
             vbuffer = vbuffer
+            vertices = vertices
 
     fn draw (self render-pass)
+        wgpu.queue_write_buffer gfxstate.istate.queue self.vbuffer 0
+            (imply self.vertices pointer) as (pointer u8)
+            (sizeof VertexAttributes) * (countof self.vertices)
+
+        wgpu.render_pass_set_vertex_buffer render-pass 0 self.vbuffer 0 (sizeof VertexAttributes)
+        wgpu.render_pass_set_index_buffer render-pass self.ibuffer 0 IndexBufferSize
+        # 2 triangles per sprite
+        let index-count = ((self.SpriteCount * 6:usize) as u32)
+        wgpu.render_pass_draw_indexed render-pass index-count 1 0 0 0
         ;
+
+    fn clear (self)
+        'clear self.vertices
+        ;
+    fn... add (self, x : i32, y : i32, width : i32, height : i32, orientation : f32, texture-quad)
+        using import math
+
+        let id = ((countof self.vertices) // 4)
+        # for now tint will always be white
+        color := (vec4 1 1 1 1)
+
+        let origin = (vec2 x y)
+        let uvx uvy uvw uvh =
+            texture-quad.position.x
+            texture-quad.position.y
+            texture-quad.extent.x
+            texture-quad.extent.y
+        'append self.vertices
+            # top left
+            VertexAttributes
+                position = origin
+                uv = (vec2 uvx (uvy + uvh))
+                color = color
+        'append self.vertices
+            # top right
+            VertexAttributes
+                position = (origin + (2drotate (vec2 width 0) orientation))
+                uv = (vec2 (uvx + uvw) (uvy + uvh))
+                color = color
+        'append self.vertices
+            # bottom left
+            VertexAttributes
+                position = (origin + (2drotate (vec2 0 height) orientation))
+                uv = (vec2 uvx uvy)
+                color = color
+        'append self.vertices
+            # bottom right
+            VertexAttributes
+                position = (origin + (2drotate (vec2 width height) orientation))
+                uv = (vec2 (uvx + uvw) uvy)
+                color = color
+        id
 locals;
