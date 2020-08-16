@@ -46,9 +46,9 @@ global tex-atlas =
             label = "atlas"
             size =
                 wgpu.Extent3d
-                    width = tex-atlas-data.width
-                    height = tex-atlas-data.height
-                    depth = 1
+                    width = 45
+                    height = 45
+                    depth = 56
             mip_level_count = 1
             sample_count = 1
             dimension = wgpu.TextureDimension.D2
@@ -56,20 +56,30 @@ global tex-atlas =
             usage =
                 wgpu.TextureUsage_COPY_DST | wgpu.TextureUsage_SAMPLED
 
-wgpu.queue_write_texture gfxstate.istate.queue
-    &local wgpu.TextureCopyView
-        texture = tex-atlas
-        mip_level = 0
-    tex-atlas-data.data
-    tex-atlas-data.Size
-    &local wgpu.TextureDataLayout
-        offset = 0
-        bytes_per_row = (4 * tex-atlas-data.width)
-        rows_per_image = tex-atlas-data.height
-    &local wgpu.Extent3d
-        width = tex-atlas-data.width
-        height = tex-atlas-data.height
-        depth = 1
+# values are hardcoded.
+# The atlas is 360x315 px, and every array slice is 45x45.
+for i in (range 56)
+    i as:= u32
+    let x = ((i % 8) * 45)
+    let y = ((i // 8) * 45)
+    # skips y rows in the data pointer
+    let offset = ((4 * tex-atlas-data.width * y) + (4 * x))
+    wgpu.queue_write_texture gfxstate.istate.queue
+        &local wgpu.TextureCopyView
+            texture = tex-atlas
+            mip_level = 0
+            origin =
+                typeinit 0 0 i
+        & (tex-atlas-data.data @ offset)
+        # the byte size of one slice
+        tex-atlas-data.Size
+        &local wgpu.TextureDataLayout
+            bytes_per_row = (tex-atlas-data.width * 4)
+            rows_per_image = 45
+        &local wgpu.Extent3d
+            width = 45
+            height = 45
+            depth = 1
 
 let atlas-tex-view =
     wgpu.texture_create_view tex-atlas
@@ -81,7 +91,7 @@ let atlas-tex-view =
             base_mip_level = 0
             level_count = 1
             base_array_layer = 0
-            array_layer_count = 1
+            array_layer_count = 56
 
 let atlas-sampler =
     wgpu.device_create_sampler device
@@ -115,7 +125,7 @@ let vertex-shader fragment-shader =
 
         fn fragment ()
             using sprite2d-fs
-            fcolor = (vcolor * (texture (sampler2D diffuse-t diffuse-s) vtexcoord))
+            fcolor = (vcolor * (texture (sampler2DArray diffuse-t diffuse-s) vtexcoord))
 
         let vsrc = (compile-spirv 'vertex (static-typify vertex))
         let vlen = ((countof vsrc) // 4)
@@ -159,7 +169,7 @@ local bind-group-layouts =
                                 binding = 0
                                 visibility = wgpu.WGPUShaderStage_FRAGMENT
                                 ty = wgpu.BindingType.SampledTexture
-                                view_dimension = wgpu.TextureViewDimension.D2
+                                view_dimension = wgpu.TextureViewDimension.D2Array
                                 texture_component_type =
                                     wgpu.TextureComponentType.Uint
                             typeinit
@@ -224,7 +234,7 @@ global sprite-pipeline =
                                         typeinit
                                             offset =
                                                 (offsetof 2dtools.SpriteVertexAttributes 'uv)
-                                            format = wgpu.VertexFormat.Float2
+                                            format = wgpu.VertexFormat.Float3
                                             shader_location =
                                                 shader-bindings.Sprite2DAttribute.TextureCoordinates
                                         typeinit
@@ -249,6 +259,7 @@ global transform-bgroup =
             entries = &transform-binding
             entries_length = 1
 
+print atlas-sampler
 global atlas-tex-bgroup =
     wgpu.device_create_bind_group device
         &local wgpu.BindGroupDescriptor
@@ -260,6 +271,7 @@ global atlas-tex-bgroup =
                         gfx.descriptors.bindings.TextureView 0 atlas-tex-view
                         gfx.descriptors.bindings.Sampler 1 atlas-sampler
             entries_length = 2
+print atlas-sampler
 
 global batch = (2dtools.SpriteBatch)
 struct Character plain

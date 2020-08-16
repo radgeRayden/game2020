@@ -12,7 +12,7 @@ struct TextureQuad plain
 
 struct SpriteVertexAttributes plain
     position : vec2
-    uv       : vec2
+    uv       : vec3
     color    : vec4
 
 struct SpriteBatch
@@ -110,34 +110,34 @@ struct SpriteBatch
         color := (vec4 1 1 1 1)
 
         let origin = (vec2 x y)
-        let uvx uvy uvw uvh =
-            texture-quad.position.x
-            texture-quad.position.y
-            texture-quad.extent.x
-            texture-quad.extent.y
+        let uvx uvy uvw uvh = 0.0 0.0 1.0 1.0
+            # texture-quad.position.x
+            # texture-quad.position.y
+            # texture-quad.extent.x
+            # texture-quad.extent.y
         'append self.vertices
             # top left
             VertexAttributes
                 position = origin
-                uv = (vec2 uvx (uvy + uvh))
+                uv = (vec3 uvx (uvy + uvh) 10)
                 color = color
         'append self.vertices
             # top right
             VertexAttributes
                 position = (origin + (2drotate (vec2 width 0) orientation))
-                uv = (vec2 (uvx + uvw) (uvy + uvh))
+                uv = (vec3 (uvx + uvw) (uvy + uvh) 10)
                 color = color
         'append self.vertices
             # bottom left
             VertexAttributes
                 position = (origin + (2drotate (vec2 0 height) orientation))
-                uv = (vec2 uvx uvy)
+                uv = (vec3 uvx uvy 10)
                 color = color
         'append self.vertices
             # bottom right
             VertexAttributes
                 position = (origin + (2drotate (vec2 width height) orientation))
-                uv = (vec2 (uvx + uvw) uvy)
+                uv = (vec3 (uvx + uvw) uvy 10)
                 color = color
         id
 locals;
