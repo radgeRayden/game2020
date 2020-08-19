@@ -16,8 +16,9 @@ enum Sprite2DAttribute plain
    
 struct SpriteQuad plain
     position : vec2
+    pivot    : vec2
     rotation : f32
-    layer   : u32
+    layer    : u32
     size     : vec2
     color    : vec4
 

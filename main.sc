@@ -135,6 +135,17 @@ let vertex-shader fragment-shader =
                     vec2 0 0
                     vec2 1 0
 
+
+            # pivot reference:
+                local v =
+                {
+                origin + pivot + _2drotate(v2(0,0) - pivot, r),
+                origin + pivot + _2drotate(v2(0,h) - pivot, r),
+                origin + pivot + _2drotate(v2(w,h) - pivot, r),
+                origin + pivot + _2drotate(v2(w,0) - pivot, r),
+                origin + pivot + _2drotate(v2(0,0) - pivot, r)
+                }
+
             idx  := gl_VertexIndex
             sprite := (sprites @ (idx // 4))
             origin := sprite.position
@@ -281,6 +292,7 @@ global batch =
         view (bind-group-layouts @ 2)
 struct Character plain
     position : vec2
+global game-timer = (timer.Timer)
 global character : Character
 fn update (dt)
     let KeyCode = HID.keyboard.KeyCode
@@ -293,7 +305,7 @@ fn update (dt)
         pos.x += (50 * dt)
 
     'clear batch
-    'add batch (pos.x as i32) (pos.y as i32) (45 * 3) (45 * 3) 0 10:u32
+    'add batch (pos.x as i32) (pos.y as i32) (45 * 3) (45 * 3) (('run-time-real game-timer) as f32) 10:u32
     ;
 
 fn draw ()
@@ -335,7 +347,6 @@ fn draw ()
     wgpu.swap_chain_present gfxstate.istate.swap-chain
     ;
 
-global game-timer = (timer.Timer)
 while (not (HID.window.received-quit-event?))
     HID.window.poll-events;
     'step game-timer
