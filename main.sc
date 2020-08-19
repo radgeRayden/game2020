@@ -117,16 +117,41 @@ let vertex-shader fragment-shader =
     do
         using import glsl
         using shader-bindings
+        using math
         fn vertex ()
             using sprite2d-vs
-            gl_Position = (transform * (vec4 vposition 0.0 1.0))
-            vcolor.out = vcolor.in
-            vtexcoord.out = vtexcoord.in
+
+            local vertices =
+                arrayof vec2
+                    vec2 0 0 # top left
+                    vec2 1 0 # top right
+                    vec2 0 1 # bottom left
+                    vec2 1 1 # bottom right
+
+            local texcoords =
+                arrayof vec2
+                    vec2 0 1
+                    vec2 1 1
+                    vec2 0 0
+                    vec2 1 0
+
+            idx  := gl_VertexIndex
+            sprite := (sprites @ (idx // 4))
+            dump sprite
+            origin := sprite.position
+            vertex := (vertices @ (idx % 4))
+
+            dump sprite.rotation
+            gl_Position =
+                transform * (vec4 (origin + (2drotate (vertex * sprite.size) sprite.rotation)) 0 1)
+            vcolor = sprite.color
+            vtexcoord = (vec3 (texcoords @ (idx % 4)) sprite.layer)
 
         fn fragment ()
             using sprite2d-fs
             fcolor = (vcolor * (texture (sampler2DArray diffuse-t diffuse-s) vtexcoord))
 
+        print (compile-glsl 450 'vertex (static-typify vertex))
         let vsrc = (compile-spirv 'vertex (static-typify vertex))
         let vlen = ((countof vsrc) // 4)
         let vertex-module =
@@ -177,6 +202,17 @@ local bind-group-layouts =
                                 visibility = wgpu.WGPUShaderStage_FRAGMENT
                                 ty = wgpu.BindingType.Sampler
                 entries_length = 2
+        wgpu.device_create_bind_group_layout device
+            &local wgpu.BindGroupLayoutDescriptor
+                label = "sprite data"
+                entries =
+                    &local wgpu.BindGroupLayoutEntry
+                        binding = 0
+                        visibility = wgpu.WGPUShaderStage_VERTEX
+                        ty = wgpu.BindingType.StorageBuffer
+                        storage_texture_format = wgpu.TextureFormat.R8Uint
+                entries_length = 1
+
 
 let sprite-pip-layout =
     wgpu.device_create_pipeline_layout device
@@ -218,33 +254,6 @@ global sprite-pipeline =
             vertex_state =
                 wgpu.VertexStateDescriptor
                     index_format = wgpu.IndexFormat.Uint16
-                    vertex_buffers =
-                        &local wgpu.VertexBufferLayoutDescriptor
-                            array_stride = (sizeof 2dtools.SpriteVertexAttributes)
-                            step_mode = wgpu.InputStepMode.Vertex
-                            attributes =
-                                &local
-                                    arrayof wgpu.VertexAttributeDescriptor
-                                        typeinit
-                                            offset =
-                                                (offsetof 2dtools.SpriteVertexAttributes 'position)
-                                            format = wgpu.VertexFormat.Float2
-                                            shader_location =
-                                                shader-bindings.Sprite2DAttribute.Position
-                                        typeinit
-                                            offset =
-                                                (offsetof 2dtools.SpriteVertexAttributes 'uv)
-                                            format = wgpu.VertexFormat.Float3
-                                            shader_location =
-                                                shader-bindings.Sprite2DAttribute.TextureCoordinates
-                                        typeinit
-                                            offset =
-                                                (offsetof 2dtools.SpriteVertexAttributes 'color)
-                                            format = wgpu.VertexFormat.Float4
-                                            shader_location =
-                                                shader-bindings.Sprite2DAttribute.Color
-                            attributes_length = 3
-                    vertex_buffers_length = 1
             sample_count = 1
             sample_mask = 0xffffffff
 
@@ -259,21 +268,19 @@ global transform-bgroup =
             entries = &transform-binding
             entries_length = 1
 
-print atlas-sampler
-global atlas-tex-bgroup =
-    wgpu.device_create_bind_group device
-        &local wgpu.BindGroupDescriptor
-            label = "atlas texture bind group"
-            layout = (bind-group-layouts @ 1)
-            entries =
-                &local
-                    arrayof wgpu.BindGroupEntry
-                        gfx.descriptors.bindings.TextureView 0 atlas-tex-view
-                        gfx.descriptors.bindings.Sampler 1 atlas-sampler
-            entries_length = 2
-print atlas-sampler
-
-global batch = (2dtools.SpriteBatch)
+global batch =
+    2dtools.SpriteBatch
+        wgpu.device_create_bind_group device
+            &local wgpu.BindGroupDescriptor
+                label = "atlas texture bind group"
+                layout = (bind-group-layouts @ 1)
+                entries =
+                    &local
+                        arrayof wgpu.BindGroupEntry
+                            gfx.descriptors.bindings.TextureView 0 atlas-tex-view
+                            gfx.descriptors.bindings.Sampler 1 atlas-sampler
+                entries_length = 2
+        view (bind-group-layouts @ 2)
 struct Character plain
     position : vec2
 global character : Character
@@ -288,10 +295,7 @@ fn update (dt)
         pos.x += (50 * dt)
 
     'clear batch
-    'add batch (pos.x as i32) (pos.y as i32) (45 * 3) (45 * 3) 0
-        2dtools.TextureQuad
-            position = (vec2 0 0)
-            extent = (vec2 (1 / 8) (1 / 7))
+    'add batch (pos.x as i32) (pos.y as i32) (45 * 3) (45 * 3) 0 10:u32
     ;
 
 fn draw ()
@@ -325,8 +329,6 @@ fn draw ()
 
     wgpu.render_pass_set_bind_group render-pass
         \ shader-bindings.DescriptorSet.Transform transform-bgroup null 0
-    wgpu.render_pass_set_bind_group render-pass
-        \ shader-bindings.DescriptorSet.Textures atlas-tex-bgroup null 0
     'draw batch render-pass
 
     wgpu.render_pass_end_pass render-pass
