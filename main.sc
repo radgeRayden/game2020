@@ -150,7 +150,6 @@ let vertex-shader fragment-shader =
             using sprite2d-fs
             fcolor = (vcolor * (texture (sampler2DArray diffuse-t diffuse-s) vtexcoord))
 
-        print (compile-glsl 450 'vertex (static-typify vertex))
         let vsrc = (compile-spirv 'vertex (static-typify vertex))
         let vlen = ((countof vsrc) // 4)
         let vertex-module =
