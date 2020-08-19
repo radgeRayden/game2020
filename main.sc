@@ -137,13 +137,12 @@ let vertex-shader fragment-shader =
 
             idx  := gl_VertexIndex
             sprite := (sprites @ (idx // 4))
-            dump sprite
             origin := sprite.position
             vertex := (vertices @ (idx % 4))
+            orientation := (deref sprite.rotation)
 
-            dump sprite.rotation
             gl_Position =
-                transform * (vec4 (origin + (2drotate (vertex * sprite.size) sprite.rotation)) 0 1)
+                transform * (vec4 (origin + (2drotate (vertex * sprite.size) orientation)) 0 1)
             vcolor = sprite.color
             vtexcoord = (vec3 (texcoords @ (idx % 4)) sprite.layer)
 
