@@ -218,7 +218,7 @@ let sprite-pip-layout =
     wgpu.device_create_pipeline_layout device
         &local wgpu.PipelineLayoutDescriptor
             bind_group_layouts = ((& (view bind-group-layouts)) as (pointer u64))
-            bind_group_layouts_length = 2
+            bind_group_layouts_length = (countof bind-group-layouts)
 
 global sprite-pipeline =
     wgpu.device_create_render_pipeline device
