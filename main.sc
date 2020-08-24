@@ -161,7 +161,7 @@ let vertex-shader fragment-shader =
             using sprite2d-fs
             fcolor = (vcolor * (texture (sampler2DArray diffuse-t diffuse-s) vtexcoord))
 
-        let vsrc = (compile-spirv 'vertex (static-typify vertex))
+        let vsrc = (compile-spirv 0x10000 'vertex (static-typify vertex))
         let vlen = ((countof vsrc) // 4)
         let vertex-module =
             wgpu.device_create_shader_module device
@@ -170,7 +170,7 @@ let vertex-shader fragment-shader =
                         typeinit
                             bytes = (vsrc as rawstring as (pointer u32))
                             length = vlen
-        let fsrc = (compile-spirv 'fragment (static-typify fragment))
+        let fsrc = (compile-spirv 0x10000 'fragment (static-typify fragment))
         let flen = ((countof fsrc) // 4)
         let fragment-module =
             wgpu.device_create_shader_module device
