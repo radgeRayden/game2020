@@ -28,9 +28,7 @@ define-scope sprite2d-vs
         binding = 0
     let transform = `(extractvalue transform 0)
 
-    buffer sprites :
-        struct SpriteQuadArray plain
-            arr : (array SpriteQuad)
+    buffer sprites : (tuple (array SpriteQuad))
         set = DescriptorSet.Attributes
         binding = 0
     let sprites = `(extractvalue sprites 0)

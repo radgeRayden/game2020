@@ -150,7 +150,7 @@ let vertex-shader fragment-shader =
             sprite := (sprites @ (idx // 4))
             origin := sprite.position
             vertex := (vertices @ (idx % 4))
-            orientation := (deref sprite.rotation)
+            orientation := sprite.rotation
 
             gl_Position =
                 transform * (vec4 (origin + (2drotate (vertex * sprite.size) orientation)) 0 1)
