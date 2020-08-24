@@ -151,9 +151,11 @@ let vertex-shader fragment-shader =
             origin := sprite.position
             vertex := (vertices @ (idx % 4))
             orientation := sprite.rotation
+            pivot := sprite.pivot
 
             gl_Position =
-                transform * (vec4 (origin + (2drotate (vertex * sprite.size) orientation)) 0 1)
+                * transform
+                    vec4 (origin + pivot + (2drotate ((vertex * sprite.size) - pivot) orientation)) 0 1
             vcolor = sprite.color
             vtexcoord = (vec3 (texcoords @ (idx % 4)) sprite.layer)
 
@@ -305,7 +307,31 @@ fn update (dt)
         pos.x += (50 * dt)
 
     'clear batch
-    'add batch (pos.x as i32) (pos.y as i32) (45 * 3) (45 * 3) (('run-time-real game-timer) as f32) 10:u32
+    'append batch.sprites
+        shader-bindings.SpriteQuad
+            position = pos
+            rotation = (('run-time-real game-timer) as f32)
+            size = (vec2 (45 * 3) (45 * 3))
+            layer = 10
+            color = (vec4 1)
+            pivot = (vec2 ((45 * 3) // 2))
+    'append batch.sprites
+        shader-bindings.SpriteQuad
+            position = pos
+            rotation = 0
+            size = (vec2 10)
+            layer = 10
+            color = (vec4 1)
+            pivot = (vec2 0.5)
+    'append batch.sprites
+        shader-bindings.SpriteQuad
+            position = pos
+            rotation = 0
+            size = (vec2 (45 * 3))
+            layer = 10
+            color = (vec4 1)
+            pivot = (vec2 0.5)
+    #batch (pos.x as i32) (pos.y as i32) (45 * 3) (45 * 3) (('run-time-real game-timer) as f32) 10:u32
     ;
 
 fn draw ()
